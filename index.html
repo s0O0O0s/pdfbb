@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord送信フォーム</title>
+    <style>
+        body { font-family: sans-serif; margin: 50px; background: #f4f4f9; text-align: center; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block; }
+        textarea { width: 100%; max-width: 400px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
+        button { background: #5865F2; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+        button:hover { background: #4752C4; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Discordにメッセージを送信</h2>
+        <form id="discordForm">
+            <textarea id="messageInput" placeholder="メッセージを入力してください" rows="4" required></textarea>
+            <br>
+            <button type="submit">送信する</button>
+        </form>
+    </div>
+
+    <script>
+    document.getElementById('discordForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        // 🚨 コピーしたDiscordのWebhook URLをここに貼り付けます
+        const webhookUrl = "YOUR_DISCORD_WEBHOOK_URL_HERE"; 
+        const message = document.getElementById('messageInput').value;
+
+        const data = { content: message };
+
+        fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        })
+        .then(response => {
+            if (response.ok) {
+                alert('Discordへの送信に成功しました！');
+                document.getElementById('messageInput').value = '';
+            } else {
+                alert('送信に失敗しました。');
+            }
+        })
+        .catch(error => {
+            console.error('エラー:', error);
+            alert('エラーが発生しました。');
+        });
+    });
+    </script>
+</body>
+</html>
