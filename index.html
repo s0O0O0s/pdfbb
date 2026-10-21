@@ -1,56 +1,693 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Discord送信フォーム</title>
+    <title>Discord Web Chat Client</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              discord: {
+                bg: '#313338',
+                sidebar: '#2b2d31',
+                servers: '#1e1f22',
+                input: '#383a40',
+                hover: '#35373c',
+                active: '#404249',
+                blurple: '#5865f2',
+                blurpleHover: '#4752c4',
+                green: '#23a55a',
+                yellow: '#f0b232',
+                red: '#f23f43',
+                text: '#dbdee1',
+                muted: '#949ba4',
+                header: '#313338'
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { font-family: sans-serif; margin: 50px; background: #f4f4f9; text-align: center; }
-        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block; }
-        textarea { width: 100%; max-width: 400px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; }
-        button { background: #5865F2; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; margin-top: 10px; }
-        button:hover { background: #4752C4; }
+      /* Discord-style custom scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #2b2d31;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1a1b1e;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #111214;
+      }
+      .markdown-body pre {
+        background-color: #1e1f22;
+        border-radius: 6px;
+        padding: 10px;
+        margin-top: 6px;
+        margin-bottom: 6px;
+        overflow-x: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+      .markdown-body code {
+        background-color: #1e1f22;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.875rem;
+      }
     </style>
 </head>
-<body>
+<body class="bg-discord-bg text-discord-text h-full font-sans antialiased flex flex-col overflow-hidden select-none">
 
-    <div class="container">
-        <h2>Discordにメッセージを送信</h2>
-        <form id="discordForm">
-            <textarea id="messageInput" placeholder="メッセージを入力してください" rows="4" required></textarea>
-            <br>
-            <button type="submit">送信する</button>
-        </form>
+    <!-- Top Connection Status Banner -->
+    <div id="statusBanner" class="bg-discord-yellow/10 border-b border-discord-yellow/20 px-4 py-1.5 text-xs text-discord-yellow flex justify-between items-center transition-all">
+        <div class="flex items-center gap-2">
+            <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-discord-yellow animate-pulse"></span>
+            <span id="statusText">デモモード動作中（実APIを使用するには設定ボタンからTokenを入力してください）</span>
+        </div>
+        <button onclick="openSettings()" class="underline hover:opacity-80 transition-opacity">設定を開く</button>
     </div>
 
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 bg-discord-sidebar flex flex-col border-r border-[#202225]/40 flex-shrink-0 hidden md:flex">
+            <!-- Server / App Header -->
+            <div class="h-12 border-b border-[#202225]/60 flex items-center px-4 font-bold text-white shadow-sm justify-between">
+                <div class="flex items-center gap-2">
+                    <i class="fa-brands fa-discord text-discord-blurple text-xl"></i>
+                    <span>Discord Chat Client</span>
+                </div>
+                <button onclick="openSettings()" class="text-discord-muted hover:text-white transition-colors" title="設定">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+            </div>
+
+            <!-- Channels List -->
+            <div class="flex-1 overflow-y-auto p-2 space-y-1">
+                <div class="text-xs font-semibold text-discord-muted uppercase px-2 py-1 tracking-wider">テキストチャンネル</div>
+                <div class="flex items-center gap-2 px-2 py-1.5 rounded text-white bg-discord-active cursor-pointer">
+                    <i class="fa-solid fa-hashtag text-discord-muted"></i>
+                    <span id="sidebarChannelName" class="font-medium text-sm">general</span>
+                </div>
+            </div>
+
+            <!-- Bot User Status Card -->
+            <div class="bg-[#232428] p-2 flex items-center justify-between border-t border-[#202225]/50">
+                <div class="flex items-center gap-2 overflow-hidden">
+                    <div class="relative">
+                        <div id="userAvatarBadge" class="w-8 h-8 rounded-full bg-discord-blurple flex items-center justify-center font-bold text-white text-xs">
+                            BOT
+                        </div>
+                        <span id="onlineIndicator" class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-discord-green rounded-full border-2 border-[#232428]"></span>
+                    </div>
+                    <div class="flex flex-col overflow-hidden">
+                        <span id="botNameLabel" class="text-xs font-semibold text-white truncate">Discord Bot</span>
+                        <span id="botStatusLabel" class="text-[10px] text-discord-muted truncate">準備完了</span>
+                    </div>
+                </div>
+                <button onclick="openSettings()" class="text-discord-muted hover:text-white p-1 rounded hover:bg-discord-hover transition-colors">
+                    <i class="fa-solid fa-sliders"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="flex-1 flex flex-col bg-discord-bg relative overflow-hidden">
+            <!-- Channel Header -->
+            <header class="h-12 border-b border-[#202225]/60 flex items-center justify-between px-4 bg-discord-header z-10 shadow-sm">
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleMobileSidebar()" class="md:hidden text-discord-muted hover:text-white mr-2">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <i class="fa-solid fa-hashtag text-discord-muted text-xl"></i>
+                    <span id="headerChannelName" class="font-bold text-white">general</span>
+                    <span class="text-xs text-discord-muted border-l border-discord-muted/30 pl-3 ml-2 hidden sm:inline">
+                        Discord REST API & ポーリング連動クライアント
+                    </span>
+                </div>
+                
+                <div class="flex items-center gap-3 text-discord-muted">
+                    <button onclick="fetchMessages(true)" class="hover:text-white transition-colors" title="手動更新">
+                        <i id="refreshIcon" class="fa-solid fa-rotate-right"></i>
+                    </button>
+                    <button onclick="clearChatLog()" class="hover:text-white transition-colors" title="画面表示をクリア">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                    <button onclick="openSettings()" class="hover:text-white transition-colors" title="環境設定">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Messages Stream Container -->
+            <div id="messageContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
+                <!-- Welcome Notice -->
+                <div class="border-b border-discord-muted/10 pb-4 mb-4">
+                    <div class="w-16 h-16 rounded-full bg-discord-active flex items-center justify-center text-3xl text-white mb-2">
+                        <i class="fa-solid fa-hashtag"></i>
+                    </div>
+                    <h1 class="text-2xl font-bold text-white">#<span id="welcomeChannelName">general</span> へようこそ！</h1>
+                    <p class="text-discord-muted text-sm mt-1">ここが #<span id="welcomeChannelName2">general</span> チャンネルの始まりです。</p>
+                </div>
+
+                <!-- Messages inserted dynamically here -->
+                <div id="messagesList" class="space-y-4"></div>
+            </div>
+
+            <!-- Input Box Form -->
+            <div class="p-4 pt-0">
+                <form id="chatForm" onsubmit="handleSendMessage(event)" class="bg-discord-input rounded-lg p-2.5 flex items-end gap-2 focus-within:ring-1 focus-within:ring-discord-blurple">
+                    <button type="button" class="text-discord-muted hover:text-white p-1 text-lg rounded transition-colors">
+                        <i class="fa-solid fa-circle-plus"></i>
+                    </button>
+                    <textarea 
+                        id="messageInput" 
+                        rows="1"
+                        placeholder="#general へメッセージを送信" 
+                        class="bg-transparent text-discord-text focus:outline-none w-full resize-none max-h-32 text-sm leading-relaxed py-1"
+                        onkeydown="handleKeyDown(event)"></textarea>
+                    <button type="submit" id="sendBtn" class="bg-discord-blurple hover:bg-discord-blurpleHover text-white px-3 py-1.5 rounded font-medium text-sm transition-colors flex items-center gap-1">
+                        <span>送信</span>
+                        <i class="fa-solid fa-paper-plane text-xs"></i>
+                    </button>
+                </form>
+                <div class="flex justify-between items-center text-[11px] text-discord-muted mt-1 px-1">
+                    <span><strong>Enter</strong> で送信 / <strong>Shift + Enter</strong> で改行</span>
+                    <span id="pollingStatus">最終更新: 未実行</span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+        <div class="bg-discord-bg border border-[#202225] rounded-xl max-w-md w-full p-6 shadow-2xl relative text-discord-text">
+            <button onclick="closeSettings()" class="absolute top-4 right-4 text-discord-muted hover:text-white text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            
+            <div class="flex items-center gap-3 mb-4">
+                <i class="fa-solid fa-sliders text-discord-blurple text-2xl"></i>
+                <h2 class="text-xl font-bold text-white">Discord API 設定</h2>
+            </div>
+
+            <p class="text-xs text-discord-muted mb-4">
+                Discord Bot Token と Channel ID を設定することで、実際のDiscordチャンネルと双方向リアルタイム通信を行います。
+            </p>
+
+            <form onsubmit="saveSettings(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase text-discord-muted mb-1">Bot Token (DISCORD_BOT_TOKEN)</label>
+                    <input 
+                        type="password" 
+                        id="tokenInput" 
+                        placeholder="Bot N2M5..." 
+                        class="w-full bg-[#1e1f22] border border-[#202225] rounded p-2 text-sm text-white focus:outline-none focus:border-discord-blurple">
+                    <p class="text-[10px] text-discord-muted mt-1">※ Tokenはサーバーに送信されず、ローカルにのみ保存されます。</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase text-discord-muted mb-1">Channel ID (DISCORD_CHANNEL_ID)</label>
+                    <input 
+                        type="text" 
+                        id="channelIdInput" 
+                        placeholder="123456789012345678" 
+                        class="w-full bg-[#1e1f22] border border-[#202225] rounded p-2 text-sm text-white focus:outline-none focus:border-discord-blurple">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase text-discord-muted mb-1">ポーリング間隔 (秒)</label>
+                    <input 
+                        type="number" 
+                        id="pollingIntervalInput" 
+                        min="2" 
+                        max="60" 
+                        value="3" 
+                        class="w-full bg-[#1e1f22] border border-[#202225] rounded p-2 text-sm text-white focus:outline-none focus:border-discord-blurple">
+                </div>
+
+                <div class="flex items-center gap-2 pt-2">
+                    <input type="checkbox" id="demoModeCheckbox" class="w-4 h-4 rounded accent-discord-blurple cursor-pointer">
+                    <label for="demoModeCheckbox" class="text-sm font-medium cursor-pointer">デモモードを強制使用（API通信を行わない）</label>
+                </div>
+
+                <!-- Status Console log box inside settings -->
+                <div class="bg-[#1e1f22] p-2.5 rounded border border-[#202225] text-xs font-mono text-discord-muted max-h-24 overflow-y-auto" id="apiLogConsole">
+                    [System] 設定ダイアログ待機中...
+                </div>
+
+                <div class="flex justify-end gap-2 pt-3">
+                    <button type="button" onclick="resetSettings()" class="px-4 py-2 rounded text-xs hover:underline text-discord-muted hover:text-white">
+                        リセット
+                    </button>
+                    <button type="submit" class="bg-discord-blurple hover:bg-discord-blurpleHover text-white px-5 py-2 rounded text-sm font-semibold transition-colors">
+                        保存して接続
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Custom Toast Notification System (No Alert) -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
     <script>
-    document.getElementById('discordForm').addEventListener('submit', function(e) {
-        e.preventDefault();
+      // Global App State & Config Object
+      const state = {
+        botToken: localStorage.getItem('DISCORD_BOT_TOKEN') || '',
+        channelId: localStorage.getItem('DISCORD_CHANNEL_ID') || '',
+        pollingInterval: parseInt(localStorage.getItem('DISCORD_POLLING_INTERVAL') || '3', 10),
+        demoMode: localStorage.getItem('DISCORD_DEMO_MODE') === 'true' || false,
+        messages: [],
+        pollingTimer: null,
+        isFetching: false,
+        lastMessageId: null
+      };
 
-        // 🚨 コピーしたDiscordのWebhook URLをここに貼り付けます
-        const webhookUrl = "YOUR_DISCORD_WEBHOOK_URL_HERE"; 
-        const message = document.getElementById('messageInput').value;
+      // Helper: Markdown parser
+      function renderMarkdown(text) {
+        if (!text) return '';
+        let html = text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
 
-        const data = { content: message };
-
-        fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        })
-        .then(response => {
-            if (response.ok) {
-                alert('Discordへの送信に成功しました！');
-                document.getElementById('messageInput').value = '';
-            } else {
-                alert('送信に失敗しました。');
-            }
-        })
-        .catch(error => {
-            console.error('エラー:', error);
-            alert('エラーが発生しました。');
+        // Code blocks ```code```
+        html = html.replace(/```([\s\S]*?)```/g, (match, code) => {
+          return `<pre><code>${code.trim()}</code></pre>`;
         });
-    });
+
+        // Inline code `code`
+        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+        // Bold **text**
+        html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+        // Italic *text* or _text_
+        html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+
+        // URL parsing
+        const urlRegex = /(https?:\/\/[^\s<]+)/g;
+        html = html.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-discord-blurple hover:underline break-all">$1</a>');
+
+        // New lines
+        return html.replace(/\n/g, '<br>');
+      }
+
+      // Helper: Toast Notifications
+      function showToast(message, type = 'info') {
+        const toastContainer = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+        
+        let bgColor = 'bg-discord-sidebar border-discord-blurple';
+        let icon = 'fa-circle-info text-discord-blurple';
+        if (type === 'success') {
+          bgColor = 'bg-discord-sidebar border-discord-green';
+          icon = 'fa-circle-check text-discord-green';
+        } else if (type === 'error') {
+          bgColor = 'bg-discord-sidebar border-discord-red';
+          icon = 'fa-circle-exclamation text-discord-red';
+        }
+
+        toast.className = `pointer-events-auto border-l-4 ${bgColor} text-white px-4 py-3 rounded-r shadow-xl flex items-center gap-3 text-sm transition-all transform translate-y-2 opacity-0 max-w-md`;
+        toast.innerHTML = `<i class="fa-solid ${icon} text-lg"></i><span>${message}</span>`;
+
+        toastContainer.appendChild(toast);
+
+        // Animate in
+        requestAnimationFrame(() => {
+          toast.classList.remove('translate-y-2', 'opacity-0');
+        });
+
+        setTimeout(() => {
+          toast.classList.add('opacity-0', 'translate-y-2');
+          setTimeout(() => toast.remove(), 300);
+        }, 4000);
+      }
+
+      // App Initialization
+      window.onload = function() {
+        // Auto check if token exists
+        if (!state.botToken || !state.channelId) {
+          state.demoMode = true;
+        }
+
+        updateUIConfig();
+        
+        if (state.demoMode) {
+          loadDemoMessages();
+          showToast('デモモードで起動しました。設定からDiscord API Keyを登録できます。', 'info');
+        } else {
+          showToast('Discord APIへ接続中...', 'info');
+          fetchMessages(true);
+        }
+
+        startPolling();
+      };
+
+      // Update Header & UI indicators
+      function updateUIConfig() {
+        const statusBanner = document.getElementById('statusBanner');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const channelDisplay = state.channelId ? state.channelId : 'general';
+
+        document.getElementById('sidebarChannelName').innerText = channelDisplay;
+        document.getElementById('headerChannelName').innerText = channelDisplay;
+        document.getElementById('welcomeChannelName').innerText = channelDisplay;
+        document.getElementById('welcomeChannelName2').innerText = channelDisplay;
+
+        if (state.demoMode) {
+          statusBanner.className = 'bg-discord-yellow/10 border-b border-discord-yellow/20 px-4 py-1.5 text-xs text-discord-yellow flex justify-between items-center';
+          statusDot.className = 'w-2.5 h-2.5 rounded-full bg-discord-yellow animate-pulse';
+          statusText.innerText = 'デモモード動作中（実APIを使用するには設定を開いて構成してください）';
+          document.getElementById('botStatusLabel').innerText = 'デモ対話モード';
+        } else {
+          statusBanner.className = 'bg-discord-green/10 border-b border-discord-green/20 px-4 py-1.5 text-xs text-discord-green flex justify-between items-center';
+          statusDot.className = 'w-2.5 h-2.5 rounded-full bg-discord-green animate-pulse';
+          statusText.innerText = `Discord REST API 連動中 (Channel ID: ${state.channelId})`;
+          document.getElementById('botStatusLabel').innerText = 'API オンライン';
+        }
+      }
+
+      // Log to Modal Console
+      function logToConsole(msg) {
+        const consoleEl = document.getElementById('apiLogConsole');
+        const timestamp = new Date().toLocaleTimeString();
+        consoleEl.innerHTML += `<br>[${timestamp}] ${msg}`;
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+      }
+
+      // Fetch Messages via Discord API (Polling)
+      async function fetchMessages(forceScroll = false) {
+        if (state.isFetching) return;
+        if (state.demoMode || !state.botToken || !state.channelId) {
+          document.getElementById('pollingStatus').innerText = `更新: ${new Date().toLocaleTimeString()} (デモ)`;
+          return;
+        }
+
+        state.isFetching = true;
+        const refreshIcon = document.getElementById('refreshIcon');
+        refreshIcon.classList.add('fa-spin');
+
+        try {
+          const response = await fetch(`https://discord.com/api/v10/channels/${state.channelId}/messages?limit=50`, {
+            headers: {
+              'Authorization': `Bot ${state.botToken.trim()}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.message || `HTTP エラー: ${response.status}`);
+          }
+
+          const data = await response.json();
+          // API returns newest first -> reverse for chronological rendering
+          const formattedMessages = data.reverse().map(msg => ({
+            id: msg.id,
+            author: {
+              username: msg.author.username,
+              bot: msg.author.bot || false,
+              avatar: msg.author.avatar ? `https://cdn.discordapp.com/avatars/${msg.author.id}/${msg.author.avatar}.png` : null
+            },
+            content: msg.content,
+            timestamp: new Date(msg.timestamp).toLocaleString('ja-JP'),
+            attachments: msg.attachments || [],
+            embeds: msg.embeds || []
+          }));
+
+          renderMessageList(formattedMessages, forceScroll);
+          document.getElementById('pollingStatus').innerText = `最終同期: ${new Date().toLocaleTimeString()}`;
+          logToConsole(`メッセージ取得完了: ${data.length} 件`);
+        } catch (error) {
+          console.error('Fetch error:', error);
+          logToConsole(`エラー: ${error.message}`);
+          showToast(`通信エラー: ${error.message}`, 'error');
+        } finally {
+          state.isFetching = false;
+          refreshIcon.classList.remove('fa-spin');
+        }
+      }
+
+      // Render Messages
+      function renderMessageList(messages, forceScroll = false) {
+        const listContainer = document.getElementById('messagesList');
+        const container = document.getElementById('messageContainer');
+        const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 100;
+
+        listContainer.innerHTML = '';
+
+        messages.forEach(msg => {
+          const msgEl = document.createElement('div');
+          msgEl.className = 'flex items-start gap-3 hover:bg-[#2e3035] -mx-4 px-4 py-1 rounded transition-colors group';
+
+          // Avatar logic
+          let avatarHtml = `<div class="w-10 h-10 rounded-full bg-discord-blurple flex items-center justify-center font-bold text-white text-sm flex-shrink-0 mt-0.5">
+            ${msg.author.username.charAt(0).toUpperCase()}
+          </div>`;
+
+          if (msg.author.avatar) {
+            avatarHtml = `<img src="${msg.author.avatar}" alt="Avatar" class="w-10 h-10 rounded-full flex-shrink-0 mt-0.5" onerror="this.onerror=null; this.src='https://placehold.co/40x40/5865f2/ffffff?text=U';">`;
+          }
+
+          // Bot Tag
+          const botBadge = msg.author.bot 
+            ? `<span class="bg-discord-blurple text-white text-[10px] px-1 rounded font-bold uppercase ml-1.5 flex items-center h-4 align-middle"><i class="fa-solid fa-check text-[8px] mr-0.5"></i>BOT</span>` 
+            : '';
+
+          // Attachments rendering
+          let attachmentsHtml = '';
+          if (msg.attachments && msg.attachments.length > 0) {
+            msg.attachments.forEach(att => {
+              if (att.contentType && att.contentType.startsWith('image/')) {
+                attachmentsHtml += `<div class="mt-2 max-w-sm rounded overflow-hidden border border-[#202225]">
+                  <img src="${att.url}" alt="Attachment" class="max-h-60 w-auto object-cover">
+                </div>`;
+              } else {
+                attachmentsHtml += `<div class="mt-2 flex items-center gap-2 bg-[#2b2d31] p-2 rounded max-w-xs border border-[#202225]">
+                  <i class="fa-solid fa-file text-discord-blurple text-xl"></i>
+                  <a href="${att.url}" target="_blank" class="text-xs text-discord-blurple hover:underline truncate">${att.filename || '添付ファイル'}</a>
+                </div>`;
+              }
+            });
+          }
+
+          msgEl.innerHTML = `
+            ${avatarHtml}
+            <div class="flex-1 overflow-hidden">
+              <div class="flex items-center gap-1.5">
+                <span class="font-semibold text-white text-sm">${msg.author.username}</span>
+                ${botBadge}
+                <span class="text-[11px] text-discord-muted ml-2">${msg.timestamp}</span>
+              </div>
+              <div class="text-sm text-discord-text leading-relaxed markdown-body mt-0.5">${renderMarkdown(msg.content)}</div>
+              ${attachmentsHtml}
+            </div>
+          `;
+
+          listContainer.appendChild(msgEl);
+        });
+
+        if (forceScroll || isAtBottom) {
+          container.scrollTop = container.scrollHeight;
+        }
+      }
+
+      // Handle Message Submission
+      async function handleSendMessage(e) {
+        e.preventDefault();
+        const input = document.getElementById('messageInput');
+        const content = input.value.trim();
+
+        if (!content) return;
+
+        input.value = '';
+        input.style.height = 'auto';
+
+        if (state.demoMode) {
+          // Add user message to demo state
+          const userMsg = {
+            id: Date.now().toString(),
+            author: { username: 'あなた', bot: false },
+            content: content,
+            timestamp: new Date().toLocaleTimeString('ja-JP')
+          };
+          state.messages.push(userMsg);
+          renderMessageList(state.messages, true);
+
+          // Simulated Bot Response
+          setTimeout(() => {
+            let replyContent = `受信しました: "**${content}**"\n現在デモモードで動作中です。Discord Bot Tokenを設定すると、実サーバーへの配信が可能になります！`;
+
+            if (content.toLowerCase() === '/ping') {
+              replyContent = '🏓 **Pong!** レスポンス速度: `18ms`';
+            } else if (content.toLowerCase() === '/help') {
+              replyContent = '💡 **使用可能なコマンド (デモ):**\n- `/ping` - 応答確認\n- `/time` - 現在時刻の表示\n- `/clear` - ログクリア';
+            } else if (content.toLowerCase() === '/time') {
+              replyContent = `⏰ 現在時刻は **${new Date().toLocaleString()}** です。`;
+            } else if (content.toLowerCase() === '/clear') {
+              clearChatLog();
+              return;
+            }
+
+            const botMsg = {
+              id: (Date.now() + 1).toString(),
+              author: { username: 'Discord Chat Bot', bot: true },
+              content: replyContent,
+              timestamp: new Date().toLocaleTimeString('ja-JP')
+            };
+            state.messages.push(botMsg);
+            renderMessageList(state.messages, true);
+          }, 800);
+
+          return;
+        }
+
+        // Real Discord API Request
+        try {
+          const response = await fetch(`https://discord.com/api/v10/channels/${state.channelId}/messages`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bot ${state.botToken.trim()}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ content: content })
+          });
+
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.message || `送信エラー (${response.status})`);
+          }
+
+          showToast('メッセージを送信しました', 'success');
+          fetchMessages(true);
+        } catch (error) {
+          console.error('Send error:', error);
+          showToast(`送信失敗: ${error.message}`, 'error');
+        }
+      }
+
+      // Enter key handler
+      function handleKeyDown(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          handleSendMessage(e);
+        }
+      }
+
+      // Start Polling Interval Timer
+      function startPolling() {
+        if (state.pollingTimer) clearInterval(state.pollingTimer);
+        state.pollingTimer = setInterval(() => {
+          if (!state.demoMode) {
+            fetchMessages(false);
+          }
+        }, state.pollingInterval * 1000);
+      }
+
+      // Load Pre-populated Demo Messages
+      function loadDemoMessages() {
+        state.messages = [
+          {
+            id: '1',
+            author: { username: 'Discord Chat Bot', bot: true },
+            content: '👋 ようこそ！こちらは **Discord Web Client** のデモモードです。\n\n右上または左下の⚙️**設定**から Bot Token と Channel ID を入力すると、本物の Discord チャンネルとリアルタイム同期します。',
+            timestamp: '今日 12:00'
+          },
+          {
+            id: '2',
+            author: { username: 'System', bot: true },
+            content: '`/help` と入力するとデモ用コマンド一覧を返答します。',
+            timestamp: '今日 12:01'
+          }
+        ];
+        renderMessageList(state.messages, true);
+      }
+
+      // Clear Screen Chat Log
+      function clearChatLog() {
+        state.messages = [];
+        document.getElementById('messagesList').innerHTML = '';
+        showToast('チャットログの表示をクリアしました', 'info');
+      }
+
+      // Settings Modal Open / Close
+      function openSettings() {
+        document.getElementById('tokenInput').value = state.botToken;
+        document.getElementById('channelIdInput').value = state.channelId;
+        document.getElementById('pollingIntervalInput').value = state.pollingInterval;
+        document.getElementById('demoModeCheckbox').checked = state.demoMode;
+        document.getElementById('settingsModal').classList.remove('hidden');
+      }
+
+      function closeSettings() {
+        document.getElementById('settingsModal').classList.add('hidden');
+      }
+
+      // Save Settings to LocalStorage
+      function saveSettings(e) {
+        e.preventDefault();
+        state.botToken = document.getElementById('tokenInput').value.trim();
+        state.channelId = document.getElementById('channelIdInput').value.trim();
+        state.pollingInterval = Math.max(2, parseInt(document.getElementById('pollingIntervalInput').value, 10) || 3);
+        state.demoMode = document.getElementById('demoModeCheckbox').checked;
+
+        localStorage.setItem('DISCORD_BOT_TOKEN', state.botToken);
+        localStorage.setItem('DISCORD_CHANNEL_ID', state.channelId);
+        localStorage.setItem('DISCORD_POLLING_INTERVAL', state.pollingInterval);
+        localStorage.setItem('DISCORD_DEMO_MODE', state.demoMode);
+
+        updateUIConfig();
+        closeSettings();
+        startPolling();
+
+        if (state.demoMode) {
+          loadDemoMessages();
+          showToast('デモモードで保存しました', 'info');
+        } else {
+          showToast('設定を保存し、Discordへ接続を開始します', 'success');
+          fetchMessages(true);
+        }
+      }
+
+      // Reset Settings
+      function resetSettings() {
+        localStorage.clear();
+        state.botToken = '';
+        state.channelId = '';
+        state.pollingInterval = 3;
+        state.demoMode = true;
+        
+        document.getElementById('tokenInput').value = '';
+        document.getElementById('channelIdInput').value = '';
+        document.getElementById('pollingIntervalInput').value = 3;
+        document.getElementById('demoModeCheckbox').checked = true;
+
+        updateUIConfig();
+        loadDemoMessages();
+        showToast('設定を初期化しました', 'info');
+      }
+
+      // Mobile Drawer Toggle
+      function toggleMobileSidebar() {
+        const sidebar = document.querySelector('aside');
+        sidebar.classList.toggle('hidden');
+      }
     </script>
 </body>
 </html>
