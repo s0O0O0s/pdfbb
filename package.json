@@ -1,4 +1,16 @@
-FROM php:8.2-apache
-RUN apt-get update && apt-get install -y libpq-dev && docker-php-ext-install pdo pdo_pgsql
-COPY . /var/www/html/
-EXPOSE 80
+{
+  "name": "discord-chat-app",
+  "version": "1.0.0",
+  "description": "Discord API proxy and web interface for Render",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
